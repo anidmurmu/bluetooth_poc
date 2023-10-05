@@ -15,9 +15,11 @@ import android.widget.Toast
 import android.bluetooth.BluetoothDevice
 import android.bluetooth.BluetoothServerSocket
 import android.bluetooth.BluetoothSocket
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.IntentFilter
 import android.os.Message
+import android.util.Log
 import com.nutspace.nut.api.BleDeviceManager
 import io.flutter.plugin.common.PluginRegistry
 import kotlinx.coroutines.flow.update
@@ -25,6 +27,7 @@ import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
 import java.lang.Exception
+import java.util.EventListener
 import java.util.UUID
 
 /** BluetoothConnectorPlugin  */
@@ -36,11 +39,13 @@ class BluetoothConnectorPlugin : FlutterPlugin, MethodCallHandler {
     private var channel: MethodChannel? = null
     private var connectionStatus: EventChannel? = null
     private var receiveMessages: EventChannel? = null
+    private var foundDeviceEventChannel: EventChannel? = null
     var bluetoothAdapter: BluetoothAdapter? = BluetoothAdapter.getDefaultAdapter()
     var instance: BleDeviceManager? = null
     private var sendRecieve: SendRecieve? = null
     var btEnabelingIntent: Intent? = null
-    private var foundDeviceReceiver: FoundDeviceReceiver? = null;
+    private var foundDeviceReceiver: FoundDeviceReceiver? = null
+    private var foundDeviceEventSink: EventChannel.EventSink? = null
     override fun onAttachedToEngine(flutterPluginBinding: FlutterPlugin.FlutterPluginBinding) {
         context = flutterPluginBinding.applicationContext
         channel = MethodChannel(flutterPluginBinding.binaryMessenger, "bluetooth_connector")
@@ -52,8 +57,12 @@ class BluetoothConnectorPlugin : FlutterPlugin, MethodCallHandler {
         receiveMessages = EventChannel(
             flutterPluginBinding.flutterEngine.dartExecutor, "recieved_message_events"
         )
+
+        foundDeviceEventChannel = EventChannel(
+            flutterPluginBinding.flutterEngine.dartExecutor, "found_device"
+        )
         receiveMessages?.setStreamHandler(receivedMessagesStreamHandler)
-        foundDeviceReceiver = FoundDeviceReceiver(flutterPluginBinding.applicationContext)
+        foundDeviceReceiver = FoundDeviceReceiver()
     }
 
     /*private val foundDeviceReceiver = FoundDeviceReceiver { device ->
@@ -104,6 +113,7 @@ class BluetoothConnectorPlugin : FlutterPlugin, MethodCallHandler {
     override fun onMethodCall(call: MethodCall, result: Result) {
         when (call.method) {
             "startScanBtDevices" -> {
+                foundDeviceEventChannel?.setStreamHandler(FoundDeviceStreamHandler())
                 context?.registerReceiver(
                     foundDeviceReceiver!!,
                     IntentFilter(BluetoothDevice.ACTION_FOUND)
@@ -115,6 +125,7 @@ class BluetoothConnectorPlugin : FlutterPlugin, MethodCallHandler {
 
             "stopScanBtDevices" -> {
                 try {
+                    foundDeviceEventChannel?.setStreamHandler(null)
                     context?.unregisterReceiver(foundDeviceReceiver)
                     bluetoothAdapter?.cancelDiscovery()
                     result.success(true)
@@ -432,5 +443,44 @@ class BluetoothConnectorPlugin : FlutterPlugin, MethodCallHandler {
                     receiveMessageSink = null
                 }
             }
+
+    }
+
+    inner class FoundDeviceReceiver: BroadcastReceiver() {
+
+        override fun onReceive(context: Context?, intent: Intent?) {
+            when(intent?.action) {
+                BluetoothDevice.ACTION_FOUND -> {
+                    /*val device = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        intent.getParcelableExtra(
+                            BluetoothDevice.EXTRA_DEVICE,
+                            BluetoothDevice::class.java
+                        )
+                    } else {
+                        intent.getParcelableExtra(BluetoothDevice.EXTRA_DEVICE)
+                    }*/
+                    val device = intent.getParcelableExtra<BluetoothDevice>(BluetoothDevice.EXTRA_DEVICE)
+                    val deviceName = device?.name ?: "Unknown Device"
+                    val deviceAddress = device?.address ?: "Unknown Address"
+                    //Log.d("apple", deviceName)
+                    Log.d("apple", "events : $foundDeviceEventSink")
+                    val map = mapOf("address" to deviceAddress, "name" to deviceName)
+                    Log.d("apple", "map : " + map)
+                    foundDeviceEventSink?.success(map)
+                }
+            }
+        }
+    }
+
+    inner class FoundDeviceStreamHandler : EventChannel.StreamHandler {
+        override fun onListen(arguments: Any, events: EventChannel.EventSink?) {
+            foundDeviceEventSink = events
+            Log.d("apple", "onListen")
+        }
+
+        override fun onCancel(arguments: Any) {
+            foundDeviceEventSink = null
+            Log.d("apple", "onCancel")
+        }
     }
 }

@@ -3,6 +3,7 @@ library bluetooth_connector;
 import 'dart:async';
 
 import 'package:flutter/services.dart';
+import 'dart:developer' as developer;
 
 class BluetoothConnector {
   static const MethodChannel _channel = MethodChannel('bluetooth_connector');
@@ -12,15 +13,15 @@ class BluetoothConnector {
     return version;
   }
 
-  static const EventChannel _connectionStatusEventChannel =
-      EventChannel('connection_status');
+  static const EventChannel _connectionStatusEventChannel = EventChannel('connection_status');
+  static const EventChannel _foundDeviceStatusEventChannel = EventChannel('found_device');
 
   static const EventChannel _receivedMessagesEventChannel =
       EventChannel('recieved_message_events');
 
-  /*Future<List<BtDevice>> startScanBtDevices() async {
-    return await _channel.invokeMethod("startScanBtDevices");
-  }*/
+  Stream<dynamic> getBtDevicesStream()  {
+    return _foundDeviceStatusEventChannel.receiveBroadcastStream();
+  }
 
   Future<bool> startScanBtDevices() async {
     return await _channel.invokeMethod("startScanBtDevices");

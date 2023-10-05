@@ -4,6 +4,7 @@ import 'dart:async';
 
 import 'package:bluetooth_connector/bluetooth_connector.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'dart:developer' as developer;
 
 class BluetoothApp extends StatefulWidget {
   @override
@@ -41,6 +42,10 @@ class _BluetoothState extends State<BluetoothApp> {
       setState(() {
         _recievedMessage = newMessage.toString();
       });
+    });
+    flutterbluetoothadapter.getBtDevicesStream().listen((event) {
+      final btDevice = event as BtDevice;
+      developer.log("apple1", name: "$btDevice");
     });
   }
 
